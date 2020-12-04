@@ -1,0 +1,42 @@
+import pandas as pd
+import jieba
+import sys
+import os
+import importlib
+importlib.reload(sys)
+os.chdir(r'C:\Users\Administrator\Documents')
+posfile = r'处理后好评集.txt'
+negfile = r'处理后差评集.txt'
+stoplist = r'stopwords.txt'
+pos = pd.read_csv(posfile, encoding = 'utf-8', header = None,sep='tipdm')
+neg = pd.read_csv(negfile, encoding = 'utf-8', header = None,sep='tipdm')
+stop = pd.read_csv(stoplist, encoding = 'utf-8', header = None,sep='tipdm')
+#分词
+cut = lambda s: " ".join(jieba.cut(s))
+data1= pos[0].apply(cut)
+data2=neg[0].apply(cut)
+data1.to_csv(r'data1.txt', header = False, index = False, encoding='utf-8')
+data2.to_csv(r'data2.txt', header = False, index = False, encoding='utf-8')
+#去停用词
+poscut=r'data1.txt'
+negcut=r'data2.txt'
+pos = pd.read_csv(poscut, encoding = 'utf-8', header = None,sep='tipdm')
+neg = pd.read_csv(negcut, encoding = 'utf-8', header = None,sep='tipdm')
+stop = pd.read_csv(stoplist, encoding = 'utf-8', header = None, sep = 'tipdm')
+stop = ['', ''] + list(stop[0])
+print('===1===')
+pos[1] = pos.apply(lambda s: [x for x in s.str.split()])
+pos[2] = pos[1].apply(lambda x: [i for i in x if i not in stop])
+neg[1] = neg.apply(lambda s: [x for x in s.str.split()])
+neg[2] = neg[1].apply(lambda x: [i for i in x if i not in stop])
+from gensim import corpora,models
+#好评集主题提取
+pos_dict = corpora.Dictionary(pos[2])
+pos_corpus = [pos_dict.doc2bow(i) for i in pos[2]]
+pos_lda = models.LdaModel(corpus=pos_corpus,num_topics=5,id2word=pos_dict)
+print(pos_lda.print_topics(5))
+#差评集主题提取
+neg_dict = corpora.Dictionary(pos[2])
+neg_corpus = [neg_dict.doc2bow(i) for i in neg[2]]
+neg_lda = models.LdaModel(neg_corpus, num_topics = 5, id2word = neg_dict)
+print(neg_lda.print_topics(5))
