@@ -1,0 +1,62 @@
+#R语言
+library(jiebaR)
+library(jiebaRD)
+library(tm)
+library(tmcn)
+setwd=("C:/Users/Administrator/Desktop/10000") #设置路径
+data=readLines("./xunlianji.txt",encoding="UTF-8") #按行读取
+
+#抽取每行标签、评论信息、计算评论长度合并成一个表格
+num=nchar(data)
+type=(substr(data,1,1))
+text=substr(data,3,max(num))
+dataf=data.frame(type,text,num,stringsAsFactors=F)
+
+#对评论内容长度排序，选取好评和差评的前5000条
+index=order(num,decreasing=T)
+index=tapply(index,type[index],function(x)x[1:5000])
+index=c(index$'0',index$'1')
+text0=text[index]
+type0=type[index]
+
+# type0 重新命名为“hao”和“cha”
+class=factor(type0,labels=c("hao","cha"))
+
+#去除字母数字
+text1=gsub("[a-z]","",text0)
+text1=gsub("[0-9 0 1 2 3 4 5 6 7 8 9<>~]","",text1)
+
+#去停用词，分词
+work=worker(bylines=T,stop_word="./stopwords.txt") 
+text2=segment(text1,work)
+
+text2=lapply(text2,function(x)x[nchar(x)>1]) #去掉长度小于等于1的词
+
+text_Corpus=Corpus(VectorSource(text2)) #文本向量转化为语料库
+
+#语料库以8：2分为训练集和测试集
+index1=sample(1:length(class),length(class)*0.8)
+text_train=text_Corpus[index1]
+text_test=text_Corpus[-index1]
+
+#筛选出现在大于等于 20 条语句中的词
+#生成文档词矩阵（稀疏矩阵）
+#根据筛选出的词筛选稀疏矩阵的列
+text_train_dtm=DocumentTermMatrix(text_train)
+dict=findFreqTerms(text_train_dtm,20)
+text_train_dtm=DocumentTermMatrix(text_train,list(dictionary=dict))
+text_test_dtm=DocumentTermMatrix(text_test,list(dictionary=dict))
+
+#文档词矩阵中所有大于 0 的数字替换为“yes”，0 替换为“no”，
+#得到训练矩阵 train 和测试矩阵 test
+train=apply(text_train_dtm,MARGIN=2,function(x) ifelse(x,"yes","no"))
+test=apply(text_test_dtm,MARGIN=2,function(x) ifelse(x,"yes","no"))
+
+#朴素贝叶斯对训练矩阵建模，测试矩阵预测出分类，然后评估模型的性能
+library(e1071)
+library(gmodels)
+
+classfier=naiveBayes(train,class[index1],laplace=1)
+testpredict=predict(classfier,test,type="class")
+CrossTable(testpredict,class[-index1],prop.chisq=FALSE,prop.t=FALSE,
+prop.r=FALSE,dnn=c("predicted","actual"))
